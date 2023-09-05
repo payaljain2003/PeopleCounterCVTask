@@ -5,26 +5,26 @@ import pandas as pd
 import numpy as np
 from ultralytics import YOLO
 #from tracker import *
-from tracker import Tracker
+from tracker import Tracker   #wrapper Tracker file to ease the use of DeepSORT
 import math
 import platform
 import time
 
-count=0
-start_point = (70,180)
-end_point = (336, 235)
+count=0   
+start_point = (70,180) #starting point of the reference line
+end_point = (336, 235) #end point of the reference line
 total_count_in = 0
 total_count_out =0
-#tracker = Tracker()
+
 entry_exit ={}
 offset = 20
-width = 1020 
-height = 500
-FRAMES_PER_SECOND = 5
+
+width = 1020 #width of resized input frame
+height = 500 #height of resized input frame
+FRAMES_PER_SECOND = 10 #FPS of output video writer
 
 
-
-model = YOLO('yolov8s.pt')
+model = YOLO('yolov8s.pt') #object detection algorithm
 
 
 tracker = Tracker()
@@ -48,24 +48,51 @@ cv2.setMouseCallback('peoplecount', mouse_callback)
 
 
 def relative_position(p1, p2, test_point):
-    # Calculate vectors from p1 to p2 and p1 to the test point
-    vector1 = (p2[0] - p1[0], p2[1] - p1[1])
-    vector2 = (test_point[0] - p1[0], test_point[1] - p1[1])
+	"""
+	Calculate the relative position of a test point with respect to a line defined by two points.
 
-    # Calculate the cross product of the two vectors
-    cross_product = vector1[0] * vector2[1] - vector1[1] * vector2[0]
-    distance = abs(cross_product) / math.sqrt(vector1[0]**2 + vector1[1]**2)
+	Args:
+		p1 (tuple): The first point defining the line.
+		p2 (tuple): The second point defining the line.
+		test_point (tuple): The point to determine its relative position.
 
-    # Determine the side of the point based on the sign of the cross product
-    if cross_product >= 0:
-        return 1, distance
-    elif cross_product < 0:
-        return -1, distance
+	Returns:
+		int: 1 if the test_point is on one side of the line, -1 if on the other side.
+		float: The perpendicular distance from the test_point to the line.
+	"""
+    
+	vector1 = (p2[0] - p1[0], p2[1] - p1[1])
+	vector2 = (test_point[0] - p1[0], test_point[1] - p1[1])
+
+    
+	cross_product = vector1[0] * vector2[1] - vector1[1] * vector2[0]
+	distance = abs(cross_product) / math.sqrt(vector1[0]**2 + vector1[1]**2)
+
+
+	if cross_product >= 0:
+		return 1, distance
+	elif cross_product < 0:
+		return -1, distance
 
 
 
 def get_entry_exit_count(id,pos, start_point, end_point, entry_exit,entry_count, exit_count):
-	#pos = (cx,cy)
+	"""
+    Update entry and exit counts based on the relative position of a point.
+
+    Args:
+        id: Identifier associated with the point.
+        pos (tuple): Current position (cx, cy) of the point.
+        start_point (tuple): The starting point of a reference line.
+        end_point (tuple): The ending point of a reference line.
+        entry_exit (dict): A dictionary to track entry/exit status for each point.
+        entry_count (int): Count of entry events.
+        exit_count (int): Count of exit events.
+
+    Returns:
+        tuple: A tuple containing the updated entry_exit dictionary, entry_count, and exit_count.
+	"""
+
 	curr_pos, distance = relative_position(start_point, end_point, pos)
 	#print("[get_entry_exit_count] id, curr_pos , distance", id, curr_pos, distance)
 	if distance <= offset:
@@ -90,9 +117,9 @@ def get_entry_exit_count(id,pos, start_point, end_point, entry_exit,entry_count,
 
 
 
-video_path = os.path.join('.','Data','MainGateLuminous.mp4')
+video_path = os.path.join('.','Data','MainGateLuminous_1.mp4')  #input file
 
-output_path = os.path.join('.','Data','out_MainGateLuminous.mp4')
+output_path = os.path.join('.','Data','out_MainGateLuminous.mp4')  #output file
 if platform.system() == "Windows":
     fourcc = cv2.VideoWriter_fourcc(*'DIVX') 
 else:
@@ -117,15 +144,10 @@ while True:
 	if count % 3 !=0:
 		continue
 
-	results = model.predict(frame)
+	results = model.predict(frame)  #results [x1,y1,x2,y2,confidence,class_id]
 
-	a = results[0].boxes.boxes
-	'''
-	print(results[0])
-	print('**************************************')
-	print(results[0].boxes)
-	print('#################################')
-	'''
+	a = results[0].boxes.boxes  
+
 	#print(a)
 	distance_threshold = 10
 	object_dataframe = pd.DataFrame(a).astype('float')
@@ -150,14 +172,16 @@ while True:
 	for track in tracker.tracks:
 		bbox = track.bbox
 		x3,y3,x4,y4 = bbox
-		id = track.track_id
+		id = track.track_id  #unique tracking id for each person
 		x3, y3, x4, y4 = int(x3), int(y3), int(x4), int(y4)
-		cx = int(x3 + x4) // 2
+
+		#Calculate centre point of bounding region
+		cx = int(x3 + x4) // 2  
 		cy = int(y3 + y4) // 2
-		#cv2.circle(frame, (cx,cy), 3, (0,0,255), -1)
+
+		
 		cv2.rectangle(frame, (x3,y3),(x4,y4), (0,0,255),2)
 		cv2.putText(frame, str(id),(x3,y3), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 1)
-		#cv2.putText(frame, str(score),(x3+40,y3), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 1)
 		if start_point[0] <= cx and end_point[0] > cx:
 			entry_exit, total_count_in, total_count_out = get_entry_exit_count(id,(cx,cy), start_point, end_point, entry_exit, total_count_in, total_count_out)
 		#entered, exitted = 	get_entry_exit_count(entry_exit)
@@ -171,7 +195,7 @@ while True:
 	cv2.putText(frame, str(exitted_str),(870,463), cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 0), 2)
 
 
-	writer.write(frame)
+	writer.write(frame)  #write processed video file
 	cv2.imshow('peoplecount', frame)
 	if cv2.waitKey(1) & 0xFF== ord('q'):
 		cv2.destroyAllWindows()
