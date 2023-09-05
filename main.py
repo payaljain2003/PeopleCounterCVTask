@@ -117,7 +117,7 @@ def get_entry_exit_count(id,pos, start_point, end_point, entry_exit,entry_count,
 
 
 
-video_path = os.path.join('.','Data','MainGateLuminous_1.mp4')  #input file
+video_path = os.path.join('.','Data','MainGateLuminous.mp4')  #input file
 
 output_path = os.path.join('.','Data','out_MainGateLuminous.mp4')  #output file
 if platform.system() == "Windows":
